@@ -1,13 +1,10 @@
 from pydantic import BaseModel, Field
-import pandas as pd
-from pathlib import Path
 
 
 class ModelSpec(BaseModel):
     n_split: int = Field(ge=1, default=1)
     n_nearest: int = Field(ge=2, default=2)
-    data: list[float] = pd.read_csv(Path(__file__).resolve().parents[1] / "sample_dataset.csv").to_numpy()
-    # data: list[list]
+    data: list[list]
 
 
 class ModelInput(BaseModel):
@@ -23,6 +20,7 @@ class ProcessDetails(BaseModel):
     error_time: str | None = None
     error: str | None = None
 
+
 class ModelPrediction(BaseModel):
     model: str
-    prediction: list[int|float]
+    prediction: list[int | float]

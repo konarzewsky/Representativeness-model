@@ -1,7 +1,8 @@
 import json
-from pathlib import Path
 import logging
 import sys
+from pathlib import Path
+
 from api.env import LOG_LEVEL
 
 
@@ -44,8 +45,8 @@ class Process:
 
     @classmethod
     def details(cls, event: str) -> str:
-        return cls.details_dict.get(event)
-    
+        return cls.details_dict.get(event, "")
+
 
 def map_training_errors(error: str):
     match error:
@@ -57,4 +58,3 @@ def map_training_errors(error: str):
             return "No data provided"
         case _:
             return error
-

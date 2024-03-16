@@ -1,28 +1,30 @@
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.neighbors import NearestNeighbors
-from pathlib import Path
-import pandas as pd
-import numpy as np
-import os
-import shutil
-import pickle
 import hashlib
+import os
+import pickle
+import shutil
 from datetime import datetime
-from api.utils import prepare_logger
-from fastapi import HTTPException
-from joblib import Parallel, delayed
+from pathlib import Path
 from warnings import simplefilter
 
-simplefilter(action='ignore', category=FutureWarning)
+import numpy as np
+import pandas as pd
+from fastapi import HTTPException
+from joblib import Parallel, delayed
+from sklearn.neighbors import NearestNeighbors
+from sklearn.tree import DecisionTreeRegressor
+
+from api.utils import prepare_logger
+
+simplefilter(action="ignore", category=FutureWarning)
 
 logger = prepare_logger()
 
 
 class RepresentativenessModel:
-    models = None
+    models = []
 
-    def __init__(self):
-        self.set_paths()
+    def __init__(self, models_path: Path):
+        self.models_path = models_path
 
     def load_models(self, token: str):
         """
@@ -44,10 +46,10 @@ class RepresentativenessModel:
             models.append(pickle.load(open(model_path, "rb")))
             logger.info(f"Model {model} loaded")
         self.models = models
-        self.n_features = models[0].n_features_in_
+        self.n_features = models[0].n_features_in_  # type: ignore
         logger.info("Ensemble model loaded successfully")
 
-    def predict(self, input: np.array) -> np.array:
+    def predict(self, input: list) -> list:
         """
         Makes ensemble model predictions
         - input: array of objects for which predictions are to be made
@@ -60,7 +62,7 @@ class RepresentativenessModel:
         ):
             raise HTTPException(
                 status_code=422,
-                detail=f"Invalid input (objects should be represented by {self.n_features}-number arrays)",
+                detail=f"Invalid input (objects has to be {self.n_features}-number arrays)",
             )
         preds = []
         for object in input:
@@ -70,7 +72,7 @@ class RepresentativenessModel:
             logger.info(f"Ensemble model prediction: {pred}")
         return preds
 
-    def ensemble_predict(self, input: np.array) -> float:
+    def ensemble_predict(self, input: list) -> float:
         """
         Makes single ensemble model prediction
         Ensemble model prediction is mean of all models predicitions
@@ -78,12 +80,12 @@ class RepresentativenessModel:
         """
         preds = []
         for idx, model in enumerate(self.models):
-            pred = model.predict([input])
+            pred = model.predict([input])  # type: ignore
             preds.append(pred)
             logger.info(f"Model {idx} prediction: {pred[0]}")
-        return np.mean(preds)
+        return float(np.mean(preds))
 
-    def make_ensemble(self, data: np.array, n_split: int, n_nearest: int) -> str:
+    def make_ensemble(self, data: list, n_split: int, n_nearest: int) -> str:
         """
         Creates new ensemble model
         - data: training data
@@ -101,8 +103,10 @@ class RepresentativenessModel:
             n_nearest=n_nearest,
         )
         return token
-    
-    def run_training(self, token: str, data: list[pd.DataFrame], n_nearest: int) -> None:
+
+    def run_training(
+        self, token: str, data: list[pd.DataFrame], n_nearest: int
+    ) -> None:
         """
         Starts parallel training of models in ensemble
         - token: ensemble model token
@@ -112,22 +116,25 @@ class RepresentativenessModel:
         if any([n_nearest > len(X) for X in data]):
             raise Exception("Provided data and parameters require lower 'n_nearest'")
         self.models = Parallel(n_jobs=-1)(
-            delayed(self.train)(idx,df,n_nearest,token) for idx, df in enumerate(data)
+            delayed(self.train)(idx, df, n_nearest, token)
+            for idx, df in enumerate(data)
         )
-        self.n_features = self.models[0].n_features_in_
+        self.n_features = self.models[0].n_features_in_  # type: ignore
         logger.info("Ensemble model training finished")
-    
-    def train(self, idx: int, X: pd.DataFrame, n_nearest: int, token: str) -> DecisionTreeRegressor:
+
+    def train(
+        self, idx: int, X: pd.DataFrame, n_nearest: int, token: str
+    ) -> DecisionTreeRegressor:
         """
         Trains single model (in this case DecisionTreeRegressor)
         - idx: id of a single model in an ensemble
         - X: training dataset
-        - n_nearest: k parameter for KNN 
+        - n_nearest: k parameter for KNN
         - token: ensemble model token
         """
         neighbors = NearestNeighbors(n_neighbors=n_nearest).fit(X)
         distances, _ = neighbors.kneighbors(X)
-        distances_avg = np.mean(distances[:, 1:], axis=1)
+        distances_avg = np.mean(distances, axis=1)
         y = 1 / (1 + distances_avg)
         dtr = DecisionTreeRegressor()
         dtr = dtr.fit(X, y)
@@ -137,7 +144,7 @@ class RepresentativenessModel:
         return dtr
 
     @staticmethod
-    def split_input_data(data: np.array, n_split: int) -> np.array:
+    def split_input_data(data: list, n_split: int) -> list:
         """
         Randomly shuffles dataset and splits it equally
         - data: dataset to shuffle and split
@@ -154,13 +161,6 @@ class RepresentativenessModel:
         time_string = datetime.now().isoformat()
         token = hashlib.sha256(time_string.encode()).hexdigest()
         return token
-
-    def set_paths(self) -> None:
-        """
-        Creates directory to store trained models
-        """
-        self.models_path = Path(__file__).resolve().parents[1] / "models"
-        os.makedirs(self.models_path, exist_ok=True)
 
     def delete(self, keep: list = []) -> None:
         """

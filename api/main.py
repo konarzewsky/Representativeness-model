@@ -1,22 +1,53 @@
-from fastapi import FastAPI, BackgroundTasks, Depends
-from api.model import RepresentativenessModel
-from api.schemas import ModelSpec, ModelInput, ProcessDetails, ModelPrediction
-from api.dependencies import verify_auth_token
-from api.utils import Process, prepare_logger, map_training_errors
+import os
+import shutil
+from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Union
 
-app = FastAPI(dependencies=[Depends(verify_auth_token)])
+from fastapi import BackgroundTasks, Depends, FastAPI
 
-model = RepresentativenessModel()
+from api.dependencies import verify_auth_token
+from api.schemas import ModelInput, ModelPrediction, ModelSpec, ProcessDetails
+from api.utils import Process, map_training_errors, prepare_logger
+from model.model import RepresentativenessModel
+
+logger = prepare_logger()
+
+
+MODELS_PATH = Path(__file__).resolve().parents[1] / "models"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Creates 'models' directory before the app starts up
+    Remove 'models' directory with its contents before shutdown
+    """
+    os.makedirs(MODELS_PATH, exist_ok=True)
+    yield
+    shutil.rmtree(MODELS_PATH)
+
+
+app = FastAPI(
+    lifespan=lifespan,
+    dependencies=[Depends(verify_auth_token)],
+)
+
+model = RepresentativenessModel(models_path=MODELS_PATH)
 
 process = Process.load_status()
-logger = prepare_logger()
 
 
 def update_process_info(
     event: str, error: str | None = None, model_token: str | None = None
 ) -> None:
+    """
+    Updates current process details and removes redundant models
+    - event: event name
+    - error: error message if erro occurred
+    - model_token: model identification token
+    """
     process["details"] = Process.details(event)
 
     def drop_items(keys: list):
@@ -49,6 +80,10 @@ def update_process_info(
 
 
 def train_model_task(model_spec: ModelSpec) -> None:
+    """
+    Starts new model training in the background
+    - model_spec: new model specification
+    """
     try:
         token = model.make_ensemble(
             data=model_spec.data,
@@ -85,7 +120,11 @@ async def check_status():
     return ProcessDetails(**process)
 
 
-@app.get("/predict", response_model=Union[ModelPrediction,ProcessDetails], response_model_exclude_unset=True)
+@app.get(
+    "/predict",
+    response_model=Union[ModelPrediction, ProcessDetails],
+    response_model_exclude_unset=True,
+)
 async def predict(input: ModelInput):
     if not (token := process.get("prod_model")):
         return ProcessDetails(details="No models trained yet")
