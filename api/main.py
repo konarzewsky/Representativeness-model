@@ -15,18 +15,21 @@ from model.model import RepresentativenessModel
 logger = prepare_logger()
 
 
-MODELS_PATH = Path(__file__).resolve().parents[1] / "models"
+MAIN_PATH = Path(__file__).resolve().parents[1]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Creates 'models' directory before the app starts up
-    Remove 'models' directory with its contents before shutdown
+    Removes 'models' directory with its contents before shutdown
+    Removes 'status.json' before shutdown
     """
-    os.makedirs(MODELS_PATH, exist_ok=True)
+    os.makedirs(MAIN_PATH / "models", exist_ok=True)
     yield
-    shutil.rmtree(MODELS_PATH)
+    shutil.rmtree(MAIN_PATH / "models")
+    if os.path.exists(MAIN_PATH / "status.json"):
+        os.remove(MAIN_PATH / "status.json")
 
 
 app = FastAPI(
@@ -34,7 +37,7 @@ app = FastAPI(
     dependencies=[Depends(verify_auth_token)],
 )
 
-model = RepresentativenessModel(models_path=MODELS_PATH)
+model = RepresentativenessModel(models_path=MAIN_PATH / "models")
 
 process = Process.load_status()
 
@@ -120,7 +123,7 @@ async def check_status():
     return ProcessDetails(**process)
 
 
-@app.get(
+@app.post(
     "/predict",
     response_model=Union[ModelPrediction, ProcessDetails],
     response_model_exclude_unset=True,
