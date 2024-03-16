@@ -1,0 +1,10 @@
+pandas==2.2.1
+scikit-learn==1.4.1.post1
+fastapi==0.110.0
+uvicorn==0.28.0
+numpy==1.26.4
+black==24.2.0
+pyright==1.1.354
+flake8==7.0.0
+isort==5.13.2
+psutil==5.9.8
