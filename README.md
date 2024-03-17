@@ -1,6 +1,6 @@
 # Representativeness model
 
-Author: Wojciech Konarzewski
+Author: Wojciech Konarzewski (konarz48@gmail.com)
 
 ## Model
 
@@ -23,7 +23,21 @@ Representativeness model creation process:
 
 Production service url: https://representativeness-model.onrender.com
 
-Production auth token: contact me ```konarz48@gmail.com```
+Production auth token: ---
+
+---
+
+**CAUTION** 
+
+The current project configuration involves deleting trained models and resetting the training status when shutting down the application. In addition, it is worth mentioning that the production service has been deployed on the [render.com](render.com) platform on the Free instance type. This implies certain limitations, which are described in the [documentation](https://docs.render.com/free#spinning-down-on-idle):
+
+> Render spins down a Free web service that goes 15 minutes without receiving inbound traffic. Render spins the service back up whenever it next receives a request to process. Spinning up a service takes a few seconds, which causes a noticeable delay for incoming requests until the service is back up and running.
+
+However, my experience has shown that the delay can be even more than a minute. If you are unable to use the service after such time, please contact me (I will manually restart the application).
+
+The service may also not be able to cope with large datasets for model training (the free instance does not have impressive resources). In such a situation, I recommend running the app locally (instructions below).
+
+---
 
 The API consists of 3 main endpoints:
 
@@ -154,4 +168,4 @@ docker-compose up
 
 Local service url: http://0.0.0.0:5000
 
-Dev auth token: ```dev_auth_token```
+Dev auth token: ```dev_auth_token``` (can be changed in ```.env``` file)
